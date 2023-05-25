@@ -50,7 +50,7 @@ newtype ContractTestPlan = ContractTestPlan
     -> r
   )
 
--- | Same as `ContractTestHandler`, but wrapped in a `TestPaln`.
+-- | Same as `ContractTestHandler`, but wrapped in a `TestPlan`.
 type ContractTestPlanHandler :: Type -> Type -> Type -> Type
 type ContractTestPlanHandler distr wallets r =
   UtxoDistribution distr wallets

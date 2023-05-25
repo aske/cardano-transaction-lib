@@ -28,7 +28,7 @@ import Ctl.Internal.Test.UtxoDistribution
   , withStakeKey
   ) as X
 import Data.Log.Level (LogLevel(Trace))
-import Data.Maybe (Maybe(Nothing))
+import Data.Maybe (Maybe(Nothing, Just))
 import Data.Time.Duration (Seconds(Seconds))
 import Data.UInt as UInt
 import Effect.Aff (Aff)
@@ -68,7 +68,7 @@ defaultPlutipConfig =
   , hooks: emptyHooks
   , clusterConfig:
       { slotLength: Seconds 0.1
-      , epochSize: Nothing
+      , epochSize: Just $ UInt.fromInt 100
       , maxTxSize: Nothing
       , raiseExUnitsToMax: false
       }

@@ -122,7 +122,7 @@ runPlutipContract
   -> distr
   -> (wallets -> Contract a)
   -> Aff a
-runPlutipContract cfg distr cont = withPlutipContractEnv cfg distr
+tunPlutipContract cfg distr cont = withPlutipContractEnv cfg distr
   \env wallets ->
     runContractInEnv env (cont wallets)
 
@@ -143,8 +143,8 @@ withPlutipContractEnv plutipCfg distr cont = do
     $ liftEither >=> \{ env, wallets, printLogs } ->
         whenError printLogs (cont env wallets)
 
--- | Run `Contract`s in tests in a single Plutip instance.
--- | NOTE: This uses `MoteT`s bracketting, and thus has the same caveats.
+-- | Run several `Contract`s in tests in a single Plutip instance.
+-- | NOTE: This uses `MoteT`s bracketing, and thus has the same caveats.
 -- |       Namely, brackets are run for each of the following groups and tests.
 -- |       If you wish to only set up Plutip once, ensure all tests are wrapped
 -- |       in a single group.

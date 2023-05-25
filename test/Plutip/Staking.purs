@@ -388,7 +388,7 @@ suite = do
           pools <- getPoolIds
           pools `shouldSatisfy` Array.notElem poolOperator
 
-    skip $ test
+    test
       "Plutus Stake script: delegate to existing pool & withdraw rewards"
       do
         let
@@ -494,7 +494,7 @@ suite = do
                 getValidatorHashDelegationsAndRewards stakeValidatorHash
               rewardsAfter `shouldSatisfy` \after -> after < rewardsBefore
 
-    skip $ test
+    test
       "Native Stake script: delegate to existing pool & withdraw rewards"
       do
         let
@@ -613,7 +613,7 @@ suite = do
                 getValidatorHashDelegationsAndRewards stakeValidatorHash
               rewardsAfter `shouldSatisfy` \after -> after < rewardsBefore
 
-    skip $ test "PubKey: delegate to existing pool & withdraw rewards" do
+    test "PubKey: delegate to existing pool & withdraw rewards" do
       let
         distribution = withStakeKey privateStakeKey
           [ BigInt.fromInt 1_000_000_000 * BigInt.fromInt 1_000
