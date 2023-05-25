@@ -122,7 +122,7 @@ runPlutipContract
   -> distr
   -> (wallets -> Contract a)
   -> Aff a
-tunPlutipContract cfg distr cont = withPlutipContractEnv cfg distr
+runPlutipContract cfg distr cont = withPlutipContractEnv cfg distr
   \env wallets ->
     runContractInEnv env (cont wallets)
 
