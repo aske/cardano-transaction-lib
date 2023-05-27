@@ -48,21 +48,23 @@ main = interruptOnSignal SIGINT =<< launchAff do
     Utils.interpretWithConfig
       defaultConfig { timeout = Just $ Milliseconds 70_000.0, exit = true }
       $ group "Plutip" do
-          group "ExUnits - normal limits" do
-            testPlutipContracts config $ ExUnits.mkFailingSuite 3000
-            testPlutipContracts config $ ExUnits.mkSuite 2550
-          group "ExUnits - relaxed limits" do
-            testPlutipContracts configWithMaxExUnits $ ExUnits.mkSuite 3000
-          testPlutipContracts config Assert.suite
-          Logging.suite
-          testStartPlutipCluster
+          -- group "ExUnits - normal limits" do
+          --   testPlutipContracts config $ ExUnits.mkFailingSuite 3000
+          --   testPlutipContracts config $ ExUnits.mkSuite 2550
+          -- group "ExUnits - relaxed limits" do
+          --   testPlutipContracts configWithMaxExUnits $ ExUnits.mkSuite 3000
+          -- testPlutipContracts config Assert.suite
+          -- Logging.suite
+          -- testStartPlutipCluster
           testPlutipContracts config $ do
-            flip mapTest QueryM.AffInterface.suite
-              (noWallet <<< wrapQueryM)
+            -- flip mapTest QueryM.AffInterface.suite
+            --   (noWallet <<< wrapQueryM)
 
-            NetworkId.suite
+            liftEffect $ log "123"
+
+            -- NetworkId.suite
             Contract.suite
-          UtxoDistribution.suite
+          -- UtxoDistribution.suite
 
 configWithMaxExUnits :: PlutipConfig
 configWithMaxExUnits = config

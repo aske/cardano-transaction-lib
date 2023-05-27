@@ -51,17 +51,15 @@ You can either call it directly form your test's main or use any library for gro
 [Mote](https://github.com/garyb/purescript-mote) is a DSL for defining and grouping tests (plus other quality of life features, e.g. skipping marked tests).
 
 
-[Second](#testing-with-mote) (and more widely used) approach is to first build a tree of tests (in CTL's case a tree of `ContractTest` types) via Mote and then use the `Contract.Test.Plutip.testPlutipContracts` function to execute them.
-This allows to set up a Plutip cluster only once per `group` and then use it in many independent tests.
+[Second](#testing-with-mote) (and more widely used) approach is to first build a tree of tests (in CTL's case a tree of `ContractTest` types -- which is basicall a function from some distribution of funds to `Contract a`) via Mote and then use the `Contract.Test.Plutip.testPlutipContracts` function to execute them.
+This allows to set up a Plutip cluster only once per call to `testPlutipContracts` and then use it in many independent tests.
 The function will interpret a `MoteT` (effectful test tree) into `Aff`, which you can then actually run.
 
 The [`ctl-scaffold` template](../templates/ctl-scaffold) provides a simple `Mote`-based example.
 
 
-contracts run
-only success is checked
-
-to write actual tests use assertions library
+CTL will run contracts in your test bodies and will print errors for any failed tests.
+Only test body failures are checked and this works fine if you want to make sure your `Contract`s execute without errors; if you want to add more precise checks (like checking that particular token is now at some address, that some exact amount was transferred, etc.) then you need to either write these checks in a `Contract` monad and then throw errors, or (preferably) use the [assertions library](./test-utils.md).
 
 ### Testing in Aff context
 
@@ -128,7 +126,7 @@ Logs will be printed in case of error.
 ### Testing with Mote
 
 `Contract.Test.Plutip.testPlutipContracts` type is defined as follows (after expansion of the CTL's `TestPlanM` type synonym):
-
+-- TODO CHANGE TO TestPlanM again
 ```purescript
 testPlutipContracts
   :: PlutipConfig
@@ -139,11 +137,22 @@ testPlutipContracts
 newtype MoteT bracket test m a
 ```
 
+!!!!!!!
+
+testPlutipContracts $ do
+  test
+   ...
+  test
+   ...
+   
+   2 brackets???? or 1 bracket?
+
+!!!!
 where 
 * `bracket :: Type -> Type` is where brackets will be run (before/setup is `bracket r` and after/teardown is of type `r -> bracket Unit`),
-   * in our case it's `Aff` and is where the Plutip cluster startup/shutdown calls will be made for every `Bracket` from `Mote`
-   * ...
-   * TODO !!! do nested groups result in nested plutip cluster startups/shutdowns?
+   * in our case it's `Aff` and is where the CTL environment and Plutip cluster setup will happen,
+   * also environment setup and Plutip startup and teardown will happen once per `testPlutipContracts` call,
+   * this is due to how 
 * `test :: Type` is a type of tests themselves,
    * in our case it's [`ContractTest`](../src/Internal/Test/ContractTest.hs), which in a nutshell describes a function from some wallet UTxO distribution to a `Contract r`
    * wallet UTxO distribution is the one that you need to pattern-match on when writing tests
@@ -151,7 +160,13 @@ where
    * here we use `Aff` again
 * `a :: Type` is a result of the test suite, we use `Unit` here.
 
-Here the final `MoteT` type requires the bracket, test and test building type to all be in `Aff`. The brackets cannot be ignored in the `MoteT` test runner, as it is what allows a single plutip instance to persist over multiple tests.
+TODO: rephrase !!! Here the final `MoteT` type requires the bracket, test and test building type to all be in `Aff`. The brackets cannot be ignored in the `MoteT` test runner, as it is what allows a single plutip instance to persist over multiple tests.
+
+brackets 
+single startup of environment
+fold all distribution reqs to a single big distr, use single instance
+cluster creation = request to server -> server starts cluster -> mvar = single cluster at a timeA
+TODO: check and mention in plutip-server doc
 
 To create tests of type `ContractTest`, the user should either use `Contract.Test.Plutip.withWallets` or `Contract.Test.Plutip.noWallet`:
 
@@ -194,6 +209,8 @@ suite = testPlutipContracts config do
 <!-- see a limitation on groups for complex protocols ... by mitch -->
 
 ### Note on SIGINT
+
+TODO: `startKupo` sets SIGINT handler for the whole process
 
 Due to `testPlutipContracts`/`runPlutipContract` adding listeners to the SIGINT signal, node's default behaviour of exiting on that signal no longer occurs. This was done to add cleanup handlers and let them run in parallel instead of exiting eagerly, which is possible when running multiple clusters in parallel. To restore the exit behaviour, we provide helpers to cancel an `Aff` fiber and set the exit code, to let node shut down gracefully when no more events are to be processed.
 

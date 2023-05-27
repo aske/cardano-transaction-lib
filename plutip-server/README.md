@@ -11,3 +11,5 @@ You can configure cluster parameters like slot length, max tx size, etc. and spe
 On a successful cluster startup `plutip-server` responds with a list of keys of the newly created wallets, node configuration, directory with public and private keys for the wallets and a path to the socket of one of the nodes from the cluster (usually it's the one that finished startup the first).
 
 `plutip-server` uses Plutip as a [Haskell library](https://github.com/mlabs-haskell/plutip/tree/master#as-a-library) in Servant API handlers via `startFundedCluster` and `stopCluster` functions.
+
+TODO blah blah simple only does start up teardown on requetst only allows to run 1 cluster at a time
