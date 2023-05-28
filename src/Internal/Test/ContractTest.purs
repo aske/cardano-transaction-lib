@@ -21,7 +21,7 @@ import Ctl.Internal.Test.UtxoDistribution (class UtxoDistribution)
 -- then you can pass a function to `runTest`:
 -- `runTest \distr test -> ...` which gets you a result.
 -- In practice `runTest` is a closure that stores distribution and a test and
--- passed them to the (\distr test -> ...) function.
+-- passes them to the (\distr test -> ...) function.
 newtype ContractTest = ContractTest
   ( forall (r :: Type)
      . ( forall (distr :: Type) (wallets :: Type)
@@ -49,7 +49,7 @@ type ContractTestHandler distr wallets r =
   UtxoDistribution distr wallets => distr -> (wallets -> Contract Unit) -> r
 
 -- | Represents `Contract`s in `TestPlanM` that depend on *some* wallet `UtxoDistribution`
--- Internally this is very similar to `ContractTest`, except that
+-- Internally this is similar to `ContractTest`, except that
 -- now a `runGroupPlan` (a function wrapped in the `ContractTestPlan`) closure
 -- stores distribution and effects to construct a test tree.
 newtype ContractTestPlan = ContractTestPlan
@@ -61,7 +61,7 @@ newtype ContractTestPlan = ContractTestPlan
   )
 
 -- | Same as `ContractTestHandler`, but wrapped in a `TestPlanM`.
--- | Is used for the reconstruction of the `MoteT` value.
+-- | It is used for the reconstruction of the `MoteT` value.
 -- | See the `Ctl.Internal.Plutip.execDistribution` function for more info.
 type ContractTestPlanHandler :: Type -> Type -> Type -> Type
 type ContractTestPlanHandler distr wallets r =
