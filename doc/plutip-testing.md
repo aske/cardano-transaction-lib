@@ -31,7 +31,7 @@ All of these are provided by CTL's `overlays.runtime` (and are provided in CTL's
 The services are NOT run by `docker-compose` (via `arion`) as is the case with `launchCtlRuntime`: instead they are started and stopped on each CTL `ContractTest` execution by CTL itself.
 
 If you have based your project on the [`ctl-scaffold` template](../templates/ctl-scaffold) then you have two options to run Plutip tests:
-1. `nix develop` followed by `npm run test`
+1. `nix develop` followed by `npm run test` (recommended for development)
 2. `nix run .#checks.x86_64-linux.ctl-scaffold-plutip-test`
    * where you'd usually replace `x86_64-linux` with the system you run tests on
    * and `ctl-scaffold-plutip-test` with the name of the plutip test package for your project;
@@ -39,27 +39,30 @@ If you have based your project on the [`ctl-scaffold` template](../templates/ctl
 
 ## Testing contracts
 
-CTL can help you test the offchain `Contract`s from your project (and also the interaction of onchain and offchain code) by spinning up a disposable private testnet via Plutip and making all your `Contract`s interact with it.
+CTL can help you test the offchain `Contract`s from your project (and consequently the interaction of onchain and offchain code) by spinning up a disposable private testnet via Plutip and making all your `Contract`s interact with it.
 
 There are two approaches to writing such tests.
 
 [First](#testing-in-aff-context) is to use the `Contract.Test.Plutip.runPlutipContract` function, which takes a single `Contract`, launches a Plutip cluster and executes the passed contract.
 This function runs in `Aff`; it will also throw an exception should contract fail for any reason.
 After the contract execution the Plutip cluster is terminated.
-You can either call it directly form your test's main or use any library for grouping and describing tests which support effects in the test body, like Mote.
+You can either call it directly from your test's main or use any library for grouping and describing tests which support effects in the test body, like Mote.
 
 [Mote](https://github.com/garyb/purescript-mote) is a DSL for defining and grouping tests (plus other quality of life features, e.g. skipping marked tests).
 
 
-[Second](#testing-with-mote) (and more widely used) approach is to first build a tree of tests (in CTL's case a tree of `ContractTest` types -- which is basicall a function from some distribution of funds to `Contract a`) via Mote and then use the `Contract.Test.Plutip.testPlutipContracts` function to execute them.
-This allows to set up a Plutip cluster only once per call to `testPlutipContracts` and then use it in many independent tests.
+[Second](#testing-with-mote) (and more widely used) approach is to first build a tree of tests (in CTL's case a tree of `ContractTest` types -- basically a function from some distribution of funds to a `Contract a`) via Mote and then use the `Contract.Test.Plutip.testPlutipContracts` function to execute them.
+This allows to set up a Plutip cluster only once per top-level groups and tests passed to the `testPlutipContracts` and then use it in many independent tests.
 The function will interpret a `MoteT` (effectful test tree) into `Aff`, which you can then actually run.
 
 The [`ctl-scaffold` template](../templates/ctl-scaffold) provides a simple `Mote`-based example.
 
 
 CTL will run contracts in your test bodies and will print errors for any failed tests.
-Only test body failures are checked and this works fine if you want to make sure your `Contract`s execute without errors; if you want to add more precise checks (like checking that particular token is now at some address, that some exact amount was transferred, etc.) then you need to either write these checks in a `Contract` monad and then throw errors, or (preferably) use the [assertions library](./test-utils.md).
+Only test body failures are checked and this works fine if you want to make sure your `Contract`s execute without errors; if you want to add more precise checks (like checking that particular token is now at some address, that some exact amount was transferred, etc.) then you need to either write these checks manually in a `Contract` monad and then throw errors, or (preferably) use the [assertions library](./test-utils.md).
+
+The communication with Plutip happens via the `plutip-server`'s HTTP interface, which allows to start or stop a cluster.
+[`plutip-server`](../plutip-server) allows only once active cluster at a time, but nothing stops you from setting up multiple CTL environments and multiple `plutip-server`s by running tests in separate fibers and thus using multiple Plutip clusters simultaneously.
 
 ### Testing in Aff context
 
@@ -126,8 +129,10 @@ Logs will be printed in case of error.
 ### Testing with Mote
 
 `Contract.Test.Plutip.testPlutipContracts` type is defined as follows (after expansion of the CTL's `TestPlanM` type synonym):
--- TODO CHANGE TO TestPlanM again
 ```purescript
+type TestPlanM :: Type -> Type -> Type
+type TestPlanM test a = MoteT Aff test Aff a
+
 testPlutipContracts
   :: PlutipConfig
   -> MoteT Aff ContractTest Aff Unit
@@ -136,37 +141,17 @@ testPlutipContracts
 -- Recall that `MoteT` has three type variables
 newtype MoteT bracket test m a
 ```
-
-!!!!!!!
-
-testPlutipContracts $ do
-  test
-   ...
-  test
-   ...
-   
-   2 brackets???? or 1 bracket?
-
-!!!!
 where 
 * `bracket :: Type -> Type` is where brackets will be run (before/setup is `bracket r` and after/teardown is of type `r -> bracket Unit`),
    * in our case it's `Aff` and is where the CTL environment and Plutip cluster setup will happen,
-   * also environment setup and Plutip startup and teardown will happen once per `testPlutipContracts` call,
-   * this is due to how 
+   * also environment setup and Plutip startup and teardown will happen once per each top-level test or group inside the `testPlutipContracts` call,
+   * so wrap your tests or groups in a single group if you want for the cluster to start only once,
 * `test :: Type` is a type of tests themselves,
    * in our case it's [`ContractTest`](../src/Internal/Test/ContractTest.hs), which in a nutshell describes a function from some wallet UTxO distribution to a `Contract r`
    * wallet UTxO distribution is the one that you need to pattern-match on when writing tests
 * `m :: Type -> Type` is a monad where effects during the construction of the test suite can be performed,
    * here we use `Aff` again
 * `a :: Type` is a result of the test suite, we use `Unit` here.
-
-TODO: rephrase !!! Here the final `MoteT` type requires the bracket, test and test building type to all be in `Aff`. The brackets cannot be ignored in the `MoteT` test runner, as it is what allows a single plutip instance to persist over multiple tests.
-
-brackets 
-single startup of environment
-fold all distribution reqs to a single big distr, use single instance
-cluster creation = request to server -> server starts cluster -> mvar = single cluster at a timeA
-TODO: check and mention in plutip-server doc
 
 To create tests of type `ContractTest`, the user should either use `Contract.Test.Plutip.withWallets` or `Contract.Test.Plutip.noWallet`:
 
@@ -182,7 +167,7 @@ noWallet :: Contract Unit -> ContractTest
 noWallet test = withWallets unit (const test)
 ```
 
-Usage of `testPlutipContracts` is similar to that of `runPlutipContract`, and distributions are handled in the same way. The following is an example of running multiple tests under the same plutip instance:
+Usage of `testPlutipContracts` is similar to that of `runPlutipContract`, and distributions are handled in the same way. Here's an example:
 
 ```purescript
 suite :: MoteT Aff (Aff Unit) Aff
@@ -206,15 +191,26 @@ suite = testPlutipContracts config do
       ...
 ```
 
-TODO: note for 
--- |       If you wish to only set up Plutip once, ensure all tests that are passed
--- |       to `testPlutipContracts` are wrapped in a single group.
+To define tests suites you can use `test`, group them with `group` and also wrap tests or groups with `bracket` to execute custom actions before and after tests/groups that are inside the bracket.
+Note that in Mote you can define several tests and several groups in a single block, and bracket that wraps them will be run for each such test or group.
 
-<!-- see a limitation on groups for complex protocols ... by mitch -->
+Internally `testPlutipContracts` places a bracket that sets up the CTL environment and starts up the Plutip cluster on the top level, so if you want to launch cluster only once wrap your tests or groups in a single group.
+In the example above the environment and cluster setup will happen 3 times.
+
+
+`testPlutipContracts` also combines distributions of individual tests in a single big distribution (via nested tuples) and modifies tests to pluck their required distributions out of the big one.
+This allows to create wallets and fund them in one step, during the Plutip setup.
+See the comments in the [`Ctl.Internal.Plutip.Server` module] for more info (relevant ones are in `execDistribution` and `testPlutipContracts` functions).
+
+In complicated protocols you might want to execute some `Contract`s in one test and then execute other `Contract`s which depend on some wallet-dependent state set up by the first batch of contracts, e.g. some authorization token is present at some wallet.
+Keeping these steps in separate sequential tests allows to pinpoint where things failed much easier, but currently CTL uses separate wallets for each test without an easy way to refer to wallets in other tests, so you have to call first batch of contracts again to replicate the state of the wallets, which in turn might fail or mess up your protocol, because the chain state is shared between tests for each top-level group.
+There's a patch to CTL you can adapt (and even better -- make a PR) if you need to share wallets between tests right now, see the [limitations](#limitations) doc for more info.
+This functionality will probably be added to CTL later.
 
 ### Note on SIGINT
 
-TODO: `startKupo` sets SIGINT handler for the whole process
+<!-- TODO: clarify which node is meant here -- node.js or cardano-node? -->
+<!-- TODO: why does the CTL project template restore the default behavior? -->
 
 Due to `testPlutipContracts`/`runPlutipContract` adding listeners to the SIGINT signal, node's default behaviour of exiting on that signal no longer occurs. This was done to add cleanup handlers and let them run in parallel instead of exiting eagerly, which is possible when running multiple clusters in parallel. To restore the exit behaviour, we provide helpers to cancel an `Aff` fiber and set the exit code, to let node shut down gracefully when no more events are to be processed.
 
@@ -266,40 +262,9 @@ See a [`ctl-scaffold` template](../templates/ctl-scaffold/flake.nix) for an exam
 
 ### Limitations
 
-* Non-default value of `epochSize` (current default is 80) break staking rewards - see [this issue](https://github.com/mlabs-haskell/plutip/issues/149) for more info.
-`slotLength` can be changed without any problems.
-
-<!-- 2. share wallets for complex protocols (see mitch's slack) -->
-<!-- 3. suite :: PlutipConfig -> TestPlanM (Aff Unit) Unit -->
-<!-- suite config = -->
-<!--   -- Plutip was creating too many connections with Kupo, causing tests to fail -->
-<!--   -- if there was more than one `InitContract` in the test plan. Therefore, -->
-<!--   -- each test plan will run on its own Plutip instance.  -->
-<!--   group "CDP Plutip Tests" do -->
-<!--     testPlutipContracts' config adjusting -->
-<!--     testPlutipContracts' config merging -->
-<!--     testPlutipContracts' config partialLiquidation -->
-
-4. Also, there is this important fact that differs e.g. between PSM and Plutip - the time travel is not possible, like you can’t just go a year forward in time to see how a contract would behave after some time (real time).
-That’s what we’ve found out when we were working with the Vesting contract.
-
-you mean that it will take too much time and even slot length configuration doesn’t help that much?
-Yup, that’s right, slot length doesn’t help at all in case you want to wait the actual time (e.g. 2 months, 1 year, etc.), it’s irrelevant from the slot length.
-
-if you used plutus-simple-model ....
-
-11:18
-Such a test made sense in case of vesting script, where we wanted to test - after a year we want to unlock given amount of funds
-
-When I was with Indigo, the main issue that I had with Plutip in CTL was about wallet creation. ContractTests are currently set up in a way that they need their own distribution for each wallet they are using inside of the test. This will create brand new wallets for every test. This is fine in most scenarios, but for a complicated protocol like Indigo, it is beneficial to have the same wallet when executing different tests. I implemented my own solution into a CTL fork that included an alternative way to create Test Plans inside of testPlutipContracts.
-I feel like it should be possible to accomplish this without a fork, if startPlutipContractEnv was exported and there was more documentation around executing ContractTests inside of the ContractEnv that gets created.
-
-
-kirill
-  11:43 PM
-ah, I see, so sameWallets function was from your fork?
-
-
+* Non-default value of `epochSize` (current default is 80) break staking rewards - see [this issue](https://github.com/mlabs-haskell/plutip/issues/149) for more info. `slotLength` can be changed without any problems.
+* Currently there's no way to share wallets between separate tests (which is useful for complex protocols). You can adapt [this PR](https://github.com/IndigoProtocol/cardano-transaction-lib/pull/1) (needs to be updated for the newer versions of CTL, likely won't need too many changes) if you need it now (and even better -- make a PR to CTL).
+* If you've used a [`plutus-simple-model`](https://github.com/mlabs-haskell/plutus-simple-model) library then you might know that it allows time travel in tests, which can be very useful for testing vesting schedules, etc. Testing with Plutip doesn't allow this, as it's running a real network, so you'd have to really wait, say 1 year, in order to test onchain which checks that much time has passed.
 
 ## Using addresses with staking key components
 
@@ -325,3 +290,7 @@ Note that CTL re-distributes tADA from payment key-only ("enterprise") addresses
 ### See also
 
 - To actually write the test bodies, [assertions library](./test-utils.md) can be useful.
+- Check out the [`ContractTestUtils`](../examples/ContractTestUtils.purs) example on assertions library usage.
+- Take a look at CTL's Plutip tests for the usage examples:
+   - the entry point with `main` that runs Plutip tests is [here](../test/Plutip.purs),
+   - folder with various test suites is [here](../test/Plutip/).
