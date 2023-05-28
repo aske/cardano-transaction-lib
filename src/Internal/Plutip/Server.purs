@@ -113,7 +113,7 @@ import Node.ChildProcess (defaultSpawnOptions)
 import Node.FS.Sync (exists, mkdir) as FSSync
 import Node.Path (FilePath, dirname)
 import Type.Prelude (Proxy(Proxy))
-import Effect.Console (log)
+import Effect.Console (log, logShow)
 
 -- | Run a single `Contract` in Plutip environment.
 runPlutipContract
@@ -144,26 +144,26 @@ withPlutipContractEnv plutipCfg distr cont = do
     $ liftEither >=> \{ env, wallets, printLogs } ->
         whenError printLogs (cont env wallets)
 
--- | Run several `Contract`s in tests in a single Plutip instance.
--- | NOTE: This uses `MoteT`s bracketing, [and thus has the same caveats. -- remove]
--- |       Namely, brackets are run for each of the following groups and tests.
--- |       If you wish to only set up Plutip once, ensure all tests are wrapped
--- |       in a single group.
--- TODO: 
+-- | Run several `Contract`s in tests in a (single) Plutip instance.
+-- | NOTE: This uses `MoteT`s bracketing, and thus has the same caveats.
+-- |       Namely, brackets are run for each of the top-level groups and tests
+-- |       inside the bracket.
+-- |       If you wish to only set up Plutip once, ensure all tests that are passed
+-- |       to `testPlutipContracts` are wrapped in a single group.
 -- | https://github.com/Plutonomicon/cardano-transaction-lib/blob/develop/doc/plutip-testing.md#testing-with-mote
 testPlutipContracts
   :: PlutipConfig
   -> TestPlanM ContractTest Unit
   -> TestPlanM (Aff Unit) Unit
 testPlutipContracts plutipCfg tp = do
+  -- Modify tests to use pluck out parts of a single combined distribution
   ContractTestPlan runContractTestPlan <- lift $ execDistribution tp
-  -- this uses a different MoteT ...
   runContractTestPlan \distr tests -> do
     cleanupRef <- liftEffect $ Ref.new mempty
-   -- this sets a single bracket at the top level ...
+    -- Sets a single Mote bracket at the top level, it will be run for all
+    -- immediate tests and groups
     bracket (startPlutipContractEnv plutipCfg distr cleanupRef)
       (runCleanup cleanupRef)
-      -- the { env, ... } param is from the bracket setup result
       $ flip mapTest tests \test { env, wallets, printLogs, clearLogs } -> do
           whenError printLogs (runContractInEnv env (test wallets))
           clearLogs
@@ -180,15 +180,11 @@ testPlutipContracts plutipCfg tp = do
     resultRef <- liftEffect $ Ref.new (Left $ error "Plutip not initialized")
     let
       before = do
-        liftEffect $ log "bracket before called"
         res <- try $ before'
         liftEffect $ Ref.write res resultRef
         pure res
-      after = \_ -> do
-        -- const $ after'
-        liftEffect $ log "bracket after called"
-        after'
-    -- Set Mote `Bracket` /
+      after = \_ ->
+        const $ after'
     Mote.bracket { before, after } $ flip mapTest act \t -> do
       result <- liftEffect $ Ref.read resultRef >>= liftEither
       t result
@@ -321,6 +317,7 @@ startPlutipContractEnv plutipCfg distr cleanupRef = do
     for_ distrArray $ traverse_ \n -> when (n < BigInt.fromInt 1_000_000) do
       liftEffect $ throw $ "UTxO is too low: " <> BigInt.toString n <>
         ", must be at least 1_000_000 Lovelace"
+    liftEffect $ logShow distrArray
     bracket
       (startPlutipCluster plutipCfg distrArray)
       (const $ void $ stopPlutipCluster plutipCfg)

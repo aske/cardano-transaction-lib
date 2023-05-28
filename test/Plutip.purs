@@ -60,8 +60,6 @@ main = interruptOnSignal SIGINT =<< launchAff do
             -- flip mapTest QueryM.AffInterface.suite
             --   (noWallet <<< wrapQueryM)
 
-            liftEffect $ log "123"
-
             -- NetworkId.suite
             Contract.suite
           -- UtxoDistribution.suite

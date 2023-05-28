@@ -206,6 +206,10 @@ suite = testPlutipContracts config do
       ...
 ```
 
+TODO: note for 
+-- |       If you wish to only set up Plutip once, ensure all tests that are passed
+-- |       to `testPlutipContracts` are wrapped in a single group.
+
 <!-- see a limitation on groups for complex protocols ... by mitch -->
 
 ### Note on SIGINT
