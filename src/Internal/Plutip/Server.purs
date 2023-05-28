@@ -113,7 +113,6 @@ import Node.ChildProcess (defaultSpawnOptions)
 import Node.FS.Sync (exists, mkdir) as FSSync
 import Node.Path (FilePath, dirname)
 import Type.Prelude (Proxy(Proxy))
-import Effect.Console (log, logShow)
 
 -- | Run a single `Contract` in Plutip environment.
 runPlutipContract
@@ -317,7 +316,6 @@ startPlutipContractEnv plutipCfg distr cleanupRef = do
     for_ distrArray $ traverse_ \n -> when (n < BigInt.fromInt 1_000_000) do
       liftEffect $ throw $ "UTxO is too low: " <> BigInt.toString n <>
         ", must be at least 1_000_000 Lovelace"
-    liftEffect $ logShow distrArray
     bracket
       (startPlutipCluster plutipCfg distrArray)
       (const $ void $ stopPlutipCluster plutipCfg)
