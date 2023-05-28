@@ -61,7 +61,7 @@ newtype ContractTestPlan = ContractTestPlan
   )
 
 -- | Same as `ContractTestHandler`, but wrapped in a `TestPlanM`.
--- | Is used only for the reconstruction of the `MoteT` value.
+-- | Is used for the reconstruction of the `MoteT` value.
 -- | See the `Ctl.Internal.Plutip.execDistribution` function for more info.
 type ContractTestPlanHandler :: Type -> Type -> Type -> Type
 type ContractTestPlanHandler distr wallets r =

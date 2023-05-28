@@ -144,7 +144,7 @@ withPlutipContractEnv plutipCfg distr cont = do
     $ liftEither >=> \{ env, wallets, printLogs } ->
         whenError printLogs (cont env wallets)
 
--- | Run several `Contract`s in tests in a single Plutip instance. -- 
+-- | Run several `Contract`s in tests in a single Plutip instance.
 -- | NOTE: This uses `MoteT`s bracketing, [and thus has the same caveats. -- remove]
 -- |       Namely, brackets are run for each of the following groups and tests.
 -- |       If you wish to only set up Plutip once, ensure all tests are wrapped
@@ -209,49 +209,43 @@ whenError whenErrorAction action = do
 -- | distribution. Adapts the tests to pick their distribution out of the
 -- | combined distribution.
 -- | NOTE: Skipped tests still have their distribution generated.
+-- | This is a current way of constructing all the wallets with required distributions
+-- | in one go during Plutip startup.
 execDistribution :: TestPlanM ContractTest Unit -> Aff ContractTestPlan
 execDistribution (MoteT mote) = execWriterT mote <#> go
   where
   -- Recursively go over the tree of test `Description`s and construct a `ContractTestPlan` callback.
-  -- The `ContractTestPlan` will reconstruct the whole `MoteT` value passed to `execDistribution` by 
-  -- the same writer effects which append test descriptions or wrap them in a group.
-  -- We only need this in order ...
-  -- This reuses MoteT for different purposes ...
-
-  -- TODO: alternative below is not necessarily better
-  -- Alternative way to do this would be to traverse the `Description` tree, gather all distributions
-  -- into Array, assign a number to each `Description` (this could be done in a single pass),
-  -- then go over the tree of `Description`s again and mapTest all `value`s of `Test`s
-  -- to pluck out the required distribution out of an array of distributions
-  -- to pluck out we can either uncons array elem-by-elem or index it
-  -- how to deal with `Maybe` though? --> change `go` to `... -> Aff ContractTestPlan`?
-  -- then in the caller of `execDistributions` call Writer effect for the whole description we've already
-  -- computed and pass the whole distribution.
-  -- ... on the second thought the test tree is quite small, so the above procedure
-  -- sounds quite cumbersome and doesn't win any significant speedups over the current approach
+  -- When run the `ContractTestPlan` will reconstruct the whole `MoteT` value passed to `execDistribution`
+  -- via similar writer effects (plus combining distributions) which append test descriptions
+  -- or wrap them in a group.
   go :: Array (Description Aff ContractTest) -> ContractTestPlan
   go = flip execState emptyContractTestPlan <<< traverse_ case _ of
     Test rm { bracket, label, value: ContractTest runTest } ->
-      -- extract a distribution and a test from `runTest`
       runTest \distr test -> do
-        -- and 
         addTests distr $ MoteT
           (tell [ Test rm { bracket, label, value: test } ])
     Group rm { bracket, label, value } -> do
-      -- re-add all tests inside a group to the writer accumulator
-      -- (re)construct a sub-plan
       let ContractTestPlan runGroupPlan = go value
       runGroupPlan \distr tests ->
         addTests distr $ over MoteT
           (censor (pure <<< Group rm <<< { bracket, label, value: _ }))
           tests
 
+  -- This function is used by `go` for iteratively adding Mote tests (internally Writer monad actions)
+  -- to the `ContractTestPlan` in the State monad _and_ for combining UTxO distributions used by tests.
+  -- Given a distribution and tests (a MoteT value) this runs a `ContractTestPlan`, i.e. passes its
+  -- stored distribution and tests to our handler, and then makes a new `ContractTestPlan`, but this time
+  -- storing a tuple of stored and passed distributions and also storing a pair of Mote tests, modifying
+  -- the previously stored tests to use the first distribution, and the passed tests the second distribution
+  -- 
+  -- `go` starts at the top of the test tree and step-by-step constructs a big `ContractTestPlan` which
+  -- stores distributions of all inner tests tupled together and tests from the original test tree, which
+  -- know how to get their distribution out of the big tuple.
   addTests
     :: forall (distr :: Type) (wallets :: Type)
      . ContractTestPlanHandler distr wallets (State ContractTestPlan Unit)
   addTests distr tests = do
     modify_ \(ContractTestPlan runContractTestPlan) -> runContractTestPlan
-    -- TODO: comment about distr1 /\ distr2 /\ distr3 ....
       \distr' tests' -> ContractTestPlan \h -> h (distr' /\ distr) do
         mapTest (_ <<< fst) tests'
         mapTest (_ <<< snd) tests
